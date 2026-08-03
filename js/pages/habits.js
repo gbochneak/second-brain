@@ -241,7 +241,7 @@
 
   /* ---------- journal: general free-write + three structured prompts ---------- */
   const JOURNAL_FIELDS = [
-    { key: 'gratitude', label: '🙏 Grateful for', placeholder: 'Three things you’re grateful for today…', rows: 70 },
+    { key: 'gratitude', label: '✝️ Grateful for', placeholder: 'Three things you’re grateful for today…', rows: 70 },
     { key: 'wentWell', label: '✅ Went well', placeholder: 'One thing you did well today…', rows: 60 },
     { key: 'improveTomorrow', label: '🎯 Improve tomorrow', placeholder: 'One thing you can do better tomorrow…', rows: 60 },
     { key: 'body', label: '📝 General', placeholder: 'Anything else on your mind…', rows: 160 }
