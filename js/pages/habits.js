@@ -1,9 +1,22 @@
 'use strict';
-/* Habits & Journal — a single date-cursor view combining habit tracking
-   (Store.habitEngine) with a lightweight daily journal (Store.notesEngine
-   daily notes). No ViewEngine here: habits are a small, hand-rolled list
-   keyed off a moving date cursor, closer in spirit to dashboard.js than to
-   tasks.js's ViewEngine usage. */
+/* Habits & Journal — a single date-cursor "today view" combining habit
+   tracking (Store.habitEngine) with a structured daily journal
+   (Store.notesEngine daily notes). No ViewEngine here: habits are a small,
+   hand-rolled list keyed off a moving date cursor, closer in spirit to
+   dashboard.js than to tasks.js's ViewEngine usage.
+
+   Two deliberate design choices worth knowing before touching this file:
+   - The daily list only shows habits actually DUE on the viewed day (via
+     Store.habitEngine.isDue), grouped under Morning/Night headers by each
+     habit's `timeOfDay` field ('morning'|'night', missing = 'morning' for
+     any habit created before this field existed — see todOf()). It does
+     NOT show not-due habits at all (earlier versions dimmed them instead).
+   - There's exactly one entry point for creating/editing/deleting habits:
+     the "Edit habits" button in the page header, which opens a management
+     modal listing every habit. habitModal() takes an optional
+     opts.returnTo callback so it can hand control back to that management
+     modal after a save/delete, instead of just closing to the page.
+*/
 (function () {
   const D = Store.date;
 
@@ -14,14 +27,29 @@
   // lightweight daily view).
   let cursor = D.today();
 
-  function habitModal(container, id) {
+  const TOD = {
+    morning: { label: 'Morning', icon: '🌅' },
+    night: { label: 'Night', icon: '🌙' }
+  };
+  function todOf(h) { return h.timeOfDay === 'night' ? 'night' : 'morning'; }
+
+  /* ---------- create/edit habit modal ---------- */
+  function habitModal(container, id, opts) {
+    opts = opts || {};
     const h = id ? Store.get('habits', id) : null;
     const areas = Store.list('areas');
     const sched = (h && h.schedule) || { type: 'daily' };
+    let tod = h ? todOf(h) : 'morning';
 
     const body = `
       <label class="fld"><span>Name</span>
         <input type="text" id="fName" value="${UI.esc(h ? h.name : '')}" placeholder="Meditate" autofocus></label>
+      <label class="fld"><span>Time of day</span>
+        <div class="row tight" id="fTod">
+          <button type="button" class="btn sm ${tod === 'morning' ? 'primary' : 'ghost'}" data-tod="morning">🌅 Morning</button>
+          <button type="button" class="btn sm ${tod === 'night' ? 'primary' : 'ghost'}" data-tod="night">🌙 Night</button>
+        </div>
+      </label>
       <label class="fld"><span>Area</span><select id="fArea">${UI.optionsHtml(areas, h ? h.areaId : null, { noneLabel: 'No area' })}</select></label>
       <label class="fld"><span>Schedule</span><select id="fSchedType">
         <option value="daily" ${sched.type === 'daily' ? 'selected' : ''}>Every day</option>
@@ -42,6 +70,11 @@
     const q = sel => m.root.querySelector(sel);
     const days = new Set(sched.days ? sched.days : []);
 
+    q('#fTod').querySelectorAll('[data-tod]').forEach(b => b.onclick = () => {
+      tod = b.dataset.tod;
+      q('#fTod').querySelectorAll('[data-tod]').forEach(x => x.classList.toggle('primary', x.dataset.tod === tod));
+      q('#fTod').querySelectorAll('[data-tod]').forEach(x => x.classList.toggle('ghost', x.dataset.tod !== tod));
+    });
     q('#fSchedType').onchange = () => {
       const v = q('#fSchedType').value;
       q('#wrapDays').classList.toggle('hidden', v !== 'weekdays');
@@ -52,9 +85,16 @@
       if (days.has(i)) days.delete(i); else days.add(i);
       b.classList.toggle('on');
     });
+
+    const finish = () => {
+      m.close();
+      render(container);
+      if (opts.returnTo) opts.returnTo();
+    };
     if (h) q('#hDel').onclick = async () => {
-      if (!(await UI.confirm(`Delete "${h.name}"?`))) return;
-      Store.remove('habits', h.id); m.close(); render(container);
+      if (!(await UI.confirm(`Delete "${h.name}"? This removes its full history too.`))) return;
+      Store.remove('habits', h.id);
+      finish();
     };
     q('#hSave').onclick = () => {
       const name = q('#fName').value.trim();
@@ -64,77 +104,160 @@
       if (type === 'weekdays') schedule = { type: 'weekdays', days: [...days].sort() };
       else if (type === 'weekly') schedule = { type: 'weekly', times: Math.min(7, Math.max(1, +q('#fTimes').value || 1)) };
       else schedule = { type: 'daily' };
-      const patch = { name, areaId: q('#fArea').value || null, schedule };
+      const patch = { name, areaId: q('#fArea').value || null, schedule, timeOfDay: tod };
       if (h) Store.update('habits', h.id, patch); else Store.add('habits', patch);
-      m.close(); render(container);
+      finish();
     };
   }
 
-  function render(container) {
+  /* ---------- "Edit habits" management modal — lists every habit ---------- */
+  function manageHabitRowHtml(h) {
+    const tod = TOD[todOf(h)];
+    return `<div class="habit">
+      <div class="hname">
+        ${UI.esc(h.name)}
+        <small>${tod.icon} ${tod.label} · ${UI.esc(Store.habitEngine.scheduleLabel(h))}</small>
+      </div>
+      ${UI.areaBadge(h.areaId)}
+      <span class="row tight" style="flex:0 0 auto">
+        <button class="btn sm ghost" data-manage-edit="${h.id}">Edit</button>
+        <button class="btn sm ghost" data-manage-del="${h.id}" style="color:var(--danger)">Delete</button>
+      </span>
+    </div>`;
+  }
+
+  function manageHabitsModal(container) {
     const habits = Store.habitEngine.active();
+    const rows = habits.length ? habits.map(manageHabitRowHtml).join('')
+      : `<div class="empty"><b>No habits yet</b>Add your first one below.</div>`;
+    const body = `
+      <button class="btn primary" id="mAdd" style="width:100%;margin-bottom:14px">${UI.icon('plus')} Add habit</button>
+      <div id="mList">${rows}</div>`;
+    const m = UI.modal('Manage habits', body, { wide: true });
+
+    m.root.querySelector('#mAdd').onclick = () => {
+      m.close();
+      habitModal(container, null, { returnTo: () => manageHabitsModal(container) });
+    };
+    m.root.querySelectorAll('[data-manage-edit]').forEach(b => b.onclick = () => {
+      m.close();
+      habitModal(container, b.dataset.manageEdit, { returnTo: () => manageHabitsModal(container) });
+    });
+    m.root.querySelectorAll('[data-manage-del]').forEach(b => b.onclick = async () => {
+      const h = Store.get('habits', b.dataset.manageDel);
+      if (!h) return;
+      if (await UI.confirm(`Delete "${h.name}"? This removes its full history too.`)) {
+        Store.remove('habits', h.id);
+        render(container);
+      }
+      manageHabitsModal(container); // always return to the (possibly updated) list
+    });
+  }
+
+  /* ---------- daily habit list: due-today only, grouped by time of day ---------- */
+  function dailyHabitRowHtml(h) {
+    const done = Store.habitEngine.isDone(h, cursor);
+    const streak = Store.habitEngine.currentStreak(h);
+    return `<div class="habit">
+      <button class="check ${done ? 'done' : ''}" data-toggle="${h.id}">${UI.icon('check')}</button>
+      <div class="hname" data-edit="${h.id}" style="cursor:pointer">
+        ${UI.esc(h.name)}
+        <small>${UI.esc(Store.habitEngine.scheduleLabel(h))}</small>
+      </div>
+      ${UI.areaBadge(h.areaId)}
+      <span class="pill ${streak.n > 0 ? 'good' : ''}">${streak.n > 0 ? '🔥 ' : ''}${streak.n} ${UI.esc(streak.unit)}</span>
+    </div>`;
+  }
+
+  function renderHabitList(container) {
+    const listEl = container.querySelector('#habitList');
+    const all = Store.habitEngine.active();
+    const dueToday = all.filter(h => Store.habitEngine.isDue(h, cursor));
+    const morning = dueToday.filter(h => todOf(h) === 'morning');
+    const night = dueToday.filter(h => todOf(h) === 'night');
+
+    const group = (key, list) => !list.length ? '' : `
+      <div class="habit-group-label">${TOD[key].icon} ${TOD[key].label}</div>
+      ${list.map(dailyHabitRowHtml).join('')}`;
+
+    if (!all.length) {
+      listEl.innerHTML = `<div class="empty"><b>No habits yet</b>Click "Edit habits" above to add your first one.</div>`;
+    } else if (!dueToday.length) {
+      listEl.innerHTML = `<div class="empty"><b>Nothing due today</b>Enjoy the day off.</div>`;
+    } else {
+      listEl.innerHTML = group('morning', morning) + group('night', night);
+    }
+
+    listEl.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => {
+      Store.habitEngine.toggle(Store.get('habits', b.dataset.toggle), cursor);
+      renderHabitList(container);
+    });
+    listEl.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => habitModal(container, el.dataset.edit));
+  }
+
+  /* ---------- journal: general free-write + three structured prompts ---------- */
+  const JOURNAL_FIELDS = [
+    { key: 'gratitude', label: '🙏 Grateful for', placeholder: 'Three things you’re grateful for today…', rows: 70 },
+    { key: 'wentWell', label: '✅ Went well', placeholder: 'One thing you did well today…', rows: 60 },
+    { key: 'improveTomorrow', label: '🎯 Improve tomorrow', placeholder: 'One thing you can do better tomorrow…', rows: 60 },
+    { key: 'body', label: '📝 General', placeholder: 'Anything else on your mind…', rows: 160 }
+  ];
+
+  function renderJournal(container, note) {
+    const wrap = container.querySelector('#journalFields');
+    wrap.innerHTML = JOURNAL_FIELDS.map(f => `
+      <label class="fld"><span>${f.label}</span>
+        <textarea data-jkey="${f.key}" style="min-height:${f.rows}px" placeholder="${UI.esc(f.placeholder)}">${UI.esc(note[f.key] || '')}</textarea>
+      </label>`).join('');
+
+    const flag = container.querySelector('#saveFlag');
+    let saveTimer = null;
+    wrap.querySelectorAll('[data-jkey]').forEach(ta => {
+      ta.oninput = () => {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          const updated = Store.update('notes', note.id, { [ta.dataset.jkey]: ta.value });
+          if (updated) flag.textContent = 'Saved ' + D.relTime(updated.updatedAt);
+        }, 400);
+      };
+    });
+  }
+
+  /* ---------- page shell ---------- */
+  function render(container) {
     const note = Store.notesEngine.dailyNote(D.key(cursor), true);
 
     container.innerHTML = `
       <div class="page-head">
         <div><h1>Habits &amp; Journal</h1><div class="sub">${UI.esc(D.humanDate(cursor))}</div></div>
-        <div class="row tight">
-          <button class="btn sm" id="datePrev">‹ Prev</button>
-          <button class="btn sm ghost" id="dateToday">Today</button>
-          <button class="btn sm" id="dateNext">Next ›</button>
-        </div>
+        <button class="btn primary" id="editHabits">${UI.icon('flame')} Edit habits</button>
+      </div>
+
+      <div class="row tight" style="margin-bottom:18px">
+        <button class="btn sm" id="datePrev">‹ Prev</button>
+        <button class="btn sm ghost" id="dateToday">Today</button>
+        <button class="btn sm" id="dateNext">Next ›</button>
       </div>
 
       <div class="grid2">
         <section class="card">
-          <div class="card-h"><h2>Habits</h2><button class="btn sm primary" id="newHabit">${UI.icon('plus')} New habit</button></div>
+          <div class="card-h"><h2>Habits</h2></div>
           <div class="card-b" id="habitList"></div>
         </section>
 
         <section class="card">
           <div class="card-h"><h2>Journal</h2><span class="saveflag" id="saveFlag">Saved ${D.relTime(note.updatedAt)}</span></div>
-          <div class="card-b">
-            <textarea id="journalBody" style="min-height:420px" placeholder="Write about today…">${UI.esc(note.body)}</textarea>
-          </div>
+          <div class="card-b" id="journalFields"></div>
         </section>
       </div>`;
 
+    container.querySelector('#editHabits').onclick = () => manageHabitsModal(container);
     container.querySelector('#datePrev').onclick = () => { cursor = D.addDays(cursor, -1); render(container); };
     container.querySelector('#dateNext').onclick = () => { cursor = D.addDays(cursor, 1); render(container); };
     container.querySelector('#dateToday').onclick = () => { cursor = D.today(); render(container); };
-    container.querySelector('#newHabit').onclick = () => habitModal(container, null);
 
-    const listEl = container.querySelector('#habitList');
-    listEl.innerHTML = habits.length ? habits.map(h => {
-      const due = Store.habitEngine.isDue(h, cursor);
-      const done = Store.habitEngine.isDone(h, cursor);
-      const streak = Store.habitEngine.currentStreak(h);
-      return `<div class="habit ${due ? '' : 'notdue'}">
-        <button class="check ${done ? 'done' : ''}" data-toggle="${h.id}">${UI.icon('check')}</button>
-        <div class="hname" data-edit="${h.id}" style="cursor:pointer">
-          ${UI.esc(h.name)}
-          <small>${UI.esc(Store.habitEngine.scheduleLabel(h))}</small>
-        </div>
-        ${UI.areaBadge(h.areaId)}
-        <span class="pill ${streak.n > 0 ? 'good' : ''}">${streak.n > 0 ? '🔥 ' : ''}${streak.n} ${UI.esc(streak.unit)}</span>
-      </div>`;
-    }).join('') : `<div class="empty"><b>No habits yet</b>Add one to start tracking streaks.</div>`;
-
-    listEl.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => {
-      Store.habitEngine.toggle(Store.get('habits', b.dataset.toggle), cursor);
-      render(container);
-    });
-    listEl.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => habitModal(container, el.dataset.edit));
-
-    const ta = container.querySelector('#journalBody');
-    const flag = container.querySelector('#saveFlag');
-    let saveTimer = null;
-    ta.oninput = () => {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        const updated = Store.update('notes', note.id, { body: ta.value });
-        if (updated) flag.textContent = 'Saved ' + D.relTime(updated.updatedAt);
-      }, 400);
-    };
+    renderHabitList(container);
+    renderJournal(container, note);
   }
 
   window.Pages.habits = { render };
