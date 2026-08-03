@@ -29,9 +29,26 @@
 
   const TOD = {
     morning: { label: 'Morning', icon: '🌅' },
+    afternoon: { label: 'Afternoon', icon: '☀️' },
     night: { label: 'Night', icon: '🌙' }
   };
-  function todOf(h) { return h.timeOfDay === 'night' ? 'night' : 'morning'; }
+  const TOD_ORDER = ['morning', 'afternoon', 'night'];
+  function todOf(h) { return TOD[h.timeOfDay] ? h.timeOfDay : 'morning'; }
+
+  // Reorders within the full active-habits list (the same order everywhere
+  // habits are shown — see Store.habitEngine.active()'s doc comment).
+  // Always re-normalizes to contiguous 0..n-1 values first so a swap is
+  // meaningful even when habits share a stale/missing `order` (e.g. every
+  // habit created before this field existed defaults to 0).
+  function moveHabit(id, dir) {
+    const ordered = Store.habitEngine.active();
+    ordered.forEach((h, i) => { if (h.order !== i) Store.update('habits', h.id, { order: i }); });
+    const idx = ordered.findIndex(h => h.id === id);
+    const swapIdx = idx + dir;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
+    Store.update('habits', ordered[idx].id, { order: swapIdx });
+    Store.update('habits', ordered[swapIdx].id, { order: idx });
+  }
 
   /* ---------- create/edit habit modal ---------- */
   function habitModal(container, id, opts) {
@@ -46,8 +63,7 @@
         <input type="text" id="fName" value="${UI.esc(h ? h.name : '')}" placeholder="Meditate" autofocus></label>
       <label class="fld"><span>Time of day</span>
         <div class="row tight" id="fTod">
-          <button type="button" class="btn sm ${tod === 'morning' ? 'primary' : 'ghost'}" data-tod="morning">🌅 Morning</button>
-          <button type="button" class="btn sm ${tod === 'night' ? 'primary' : 'ghost'}" data-tod="night">🌙 Night</button>
+          ${TOD_ORDER.map(key => `<button type="button" class="btn sm ${tod === key ? 'primary' : 'ghost'}" data-tod="${key}">${TOD[key].icon} ${TOD[key].label}</button>`).join('')}
         </div>
       </label>
       <label class="fld"><span>Area</span><select id="fArea">${UI.optionsHtml(areas, h ? h.areaId : null, { noneLabel: 'No area' })}</select></label>
@@ -105,15 +121,25 @@
       else if (type === 'weekly') schedule = { type: 'weekly', times: Math.min(7, Math.max(1, +q('#fTimes').value || 1)) };
       else schedule = { type: 'daily' };
       const patch = { name, areaId: q('#fArea').value || null, schedule, timeOfDay: tod };
-      if (h) Store.update('habits', h.id, patch); else Store.add('habits', patch);
+      if (h) {
+        Store.update('habits', h.id, patch);
+      } else {
+        // new habits go to the end of the list by default
+        const maxOrder = Store.list('habits', { includeArchived: true }).reduce((m, x) => Math.max(m, x.order || 0), -1);
+        Store.add('habits', Object.assign(patch, { order: maxOrder + 1 }));
+      }
       finish();
     };
   }
 
   /* ---------- "Edit habits" management modal — lists every habit ---------- */
-  function manageHabitRowHtml(h) {
+  function manageHabitRowHtml(h, idx, total) {
     const tod = TOD[todOf(h)];
     return `<div class="habit">
+      <span class="row tight" style="flex:0 0 auto">
+        <button class="btn sm ghost" data-move-up="${h.id}" ${idx === 0 ? 'disabled' : ''} title="Move up" style="width:28px;justify-content:center;padding:5px">↑</button>
+        <button class="btn sm ghost" data-move-down="${h.id}" ${idx === total - 1 ? 'disabled' : ''} title="Move down" style="width:28px;justify-content:center;padding:5px">↓</button>
+      </span>
       <div class="hname">
         ${UI.esc(h.name)}
         <small>${tod.icon} ${tod.label} · ${UI.esc(Store.habitEngine.scheduleLabel(h))}</small>
@@ -127,31 +153,49 @@
   }
 
   function manageHabitsModal(container) {
-    const habits = Store.habitEngine.active();
-    const rows = habits.length ? habits.map(manageHabitRowHtml).join('')
-      : `<div class="empty"><b>No habits yet</b>Add your first one below.</div>`;
-    const body = `
+    const m = UI.modal('Manage habits', `
       <button class="btn primary" id="mAdd" style="width:100%;margin-bottom:14px">${UI.icon('plus')} Add habit</button>
-      <div id="mList">${rows}</div>`;
-    const m = UI.modal('Manage habits', body, { wide: true });
+      <div id="mList"></div>`, { wide: true });
+
+    function refreshList() {
+      const habits = Store.habitEngine.active();
+      const listEl = m.root.querySelector('#mList');
+      listEl.innerHTML = habits.length ? habits.map((h, i) => manageHabitRowHtml(h, i, habits.length)).join('')
+        : `<div class="empty"><b>No habits yet</b>Add your first one above.</div>`;
+
+      listEl.querySelectorAll('[data-manage-edit]').forEach(b => b.onclick = () => {
+        m.close();
+        habitModal(container, b.dataset.manageEdit, { returnTo: () => manageHabitsModal(container) });
+      });
+      listEl.querySelectorAll('[data-manage-del]').forEach(b => b.onclick = async () => {
+        const h = Store.get('habits', b.dataset.manageDel);
+        if (!h) return;
+        if (await UI.confirm(`Delete "${h.name}"? This removes its full history too.`)) {
+          Store.remove('habits', h.id);
+          render(container);
+        }
+        manageHabitsModal(container); // UI.confirm already overwrote the overlay — reopen fresh
+      });
+      // Reordering never opens a nested modal/confirm, so refresh in place —
+      // avoids a jarring close/reopen flash on every click of a rapid,
+      // repeated interaction.
+      listEl.querySelectorAll('[data-move-up]').forEach(b => b.onclick = () => {
+        moveHabit(b.dataset.moveUp, -1);
+        render(container);
+        refreshList();
+      });
+      listEl.querySelectorAll('[data-move-down]').forEach(b => b.onclick = () => {
+        moveHabit(b.dataset.moveDown, 1);
+        render(container);
+        refreshList();
+      });
+    }
 
     m.root.querySelector('#mAdd').onclick = () => {
       m.close();
       habitModal(container, null, { returnTo: () => manageHabitsModal(container) });
     };
-    m.root.querySelectorAll('[data-manage-edit]').forEach(b => b.onclick = () => {
-      m.close();
-      habitModal(container, b.dataset.manageEdit, { returnTo: () => manageHabitsModal(container) });
-    });
-    m.root.querySelectorAll('[data-manage-del]').forEach(b => b.onclick = async () => {
-      const h = Store.get('habits', b.dataset.manageDel);
-      if (!h) return;
-      if (await UI.confirm(`Delete "${h.name}"? This removes its full history too.`)) {
-        Store.remove('habits', h.id);
-        render(container);
-      }
-      manageHabitsModal(container); // always return to the (possibly updated) list
-    });
+    refreshList();
   }
 
   /* ---------- daily habit list: due-today only, grouped by time of day ---------- */
@@ -173,19 +217,19 @@
     const listEl = container.querySelector('#habitList');
     const all = Store.habitEngine.active();
     const dueToday = all.filter(h => Store.habitEngine.isDue(h, cursor));
-    const morning = dueToday.filter(h => todOf(h) === 'morning');
-    const night = dueToday.filter(h => todOf(h) === 'night');
 
-    const group = (key, list) => !list.length ? '' : `
-      <div class="habit-group-label">${TOD[key].icon} ${TOD[key].label}</div>
-      ${list.map(dailyHabitRowHtml).join('')}`;
+    const group = key => {
+      const list = dueToday.filter(h => todOf(h) === key);
+      if (!list.length) return '';
+      return `<div class="habit-group-label">${TOD[key].icon} ${TOD[key].label}</div>${list.map(dailyHabitRowHtml).join('')}`;
+    };
 
     if (!all.length) {
       listEl.innerHTML = `<div class="empty"><b>No habits yet</b>Click "Edit habits" above to add your first one.</div>`;
     } else if (!dueToday.length) {
       listEl.innerHTML = `<div class="empty"><b>Nothing due today</b>Enjoy the day off.</div>`;
     } else {
-      listEl.innerHTML = group('morning', morning) + group('night', night);
+      listEl.innerHTML = TOD_ORDER.map(group).join('');
     }
 
     listEl.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => {

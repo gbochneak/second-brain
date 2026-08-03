@@ -19,7 +19,10 @@
                  tags[],recurring(null|{type:'daily'|'weekly'|'weekdays',days[]}),
                  archived,createdAt,updatedAt,completedAt}
      habits     {id,name,schedule({type:'daily'}|{type:'weekdays',days[]}|
-                 {type:'weekly',times}),areaId,archived,createdAt}
+                 {type:'weekly',times}),timeOfDay('morning'|'afternoon'|'night',
+                 missing/invalid treated as 'morning'),order(number, controls
+                 display order everywhere habits list — see reorder buttons
+                 in js/pages/habits.js's manage-habits modal),areaId,archived,createdAt}
      completions{ [habitId]: { 'YYYY-MM-DD': 1 } }   -- not archivable, keyed map
      notes      {id,title,body,type('note'|'resource'|'book'),url,author,rating,
                  areaId,projectId,daily('YYYY-MM-DD'|null),archived,createdAt,updatedAt}
@@ -279,7 +282,13 @@ function habitRate(habit, span) {
   return { due, hit, pct: due ? Math.round(hit / due * 100) : 0 };
 }
 function totalDone(habit) { return Object.keys(state.completions[habit.id] || {}).length; }
-function activeHabits() { return list('habits'); }
+// Sorted by the user-controlled `order` field (see js/pages/habits.js's
+// manage-habits reorder buttons) so every consumer — the daily view, the
+// management modal, Dashboard's at-risk list, Review Hub — shows habits in
+// the same, deliberately-chosen order. Array.prototype.sort is stable, so
+// habits without an order value yet (pre-existing before this field
+// existed) just keep their original array order relative to each other.
+function activeHabits() { return list('habits').sort((a, b) => (a.order || 0) - (b.order || 0)); }
 
 const HabitEngine = {
   isDue, isDone, toggle: toggleCompletion, scheduleLabel, weekCount,
