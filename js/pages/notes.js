@@ -102,7 +102,7 @@
     if (!card) return;
     const n = selId ? Store.get('notes', selId) : null;
     if (!n) {
-      card.innerHTML = `<div class="empty"><b>No note selected</b>Pick a note on the left, or create a new one.</div>`;
+      card.innerHTML = `<div class="empty"><b>No note selected</b>Pick a note on the left, or create a new one. Once a note is open, look for the 🌅 "Set as morning read" button up top to make it your once-a-day popup.</div>`;
       return;
     }
     const areas = Store.list('areas'), projects = Store.list('projects');
