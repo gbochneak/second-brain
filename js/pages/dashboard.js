@@ -47,24 +47,24 @@
       <div class="grid2">
         <div style="display:flex;flex-direction:column;gap:18px">
           <section class="card">
-            <div class="card-h"><h2>Today &amp; overdue</h2><button class="btn sm" data-goto="tasks">Open Tasks ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge accent">${UI.icon('check')}</span>Today &amp; overdue</h2><button class="btn sm" data-goto="tasks">Open Tasks ${UI.icon('arrowRight')}</button></div>
             <div class="card-b" id="dashTasks"></div>
           </section>
 
           <section class="card">
-            <div class="card-h"><h2>Active projects</h2><button class="btn sm" data-goto="projects">Open Projects ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge">${UI.icon('folder')}</span>Active projects</h2><button class="btn sm" data-goto="projects">Open Projects ${UI.icon('arrowRight')}</button></div>
             <div class="card-b" id="dashProjects"></div>
           </section>
 
           <section class="card">
-            <div class="card-h"><h2>Upcoming goals</h2><button class="btn sm" data-goto="goals">Open Goals ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge">${UI.icon('target')}</span>Upcoming goals</h2><button class="btn sm" data-goto="goals">Open Goals ${UI.icon('arrowRight')}</button></div>
             <div class="card-b" id="dashGoals"></div>
           </section>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:18px">
           ${atRiskHabits.length ? `<section class="card" style="border-color:var(--warn)">
-            <div class="card-h"><h2>⚠️ Streaks at risk</h2><button class="btn sm" data-goto="habits">Habits ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge" style="background:var(--warn-soft);color:var(--warn)">${UI.icon('flame')}</span>Streaks at risk</h2><button class="btn sm" data-goto="habits">Habits ${UI.icon('arrowRight')}</button></div>
             <div class="card-b">${atRiskHabits.map(h => {
               const st = Store.habitEngine.currentStreak(h);
               return `<div class="habit"><button class="check" data-habit="${h.id}">${UI.icon('check')}</button>
@@ -73,14 +73,14 @@
           </section>` : ''}
 
           <section class="card">
-            <div class="card-h"><h2>Recent notes</h2><button class="btn sm" data-goto="notes">Open Notes ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge">${UI.icon('book')}</span>Recent notes</h2><button class="btn sm" data-goto="notes">Open Notes ${UI.icon('arrowRight')}</button></div>
             <div class="card-b">${notes.length ? notes.map(n => `
               <div class="kv"><span class="k">${n.type === 'book' ? '📕' : n.type === 'resource' ? '🔗' : '📝'} ${UI.esc(n.title || 'Untitled')}</span><span>${D.relTime(n.updatedAt)}</span></div>
             `).join('') : '<div class="empty" style="padding:14px">No notes yet.</div>'}</div>
           </section>
 
           <section class="card">
-            <div class="card-h"><h2>Watching / reading</h2><button class="btn sm" data-goto="watchlist">Watchlist ${UI.icon('arrowRight')}</button></div>
+            <div class="card-h"><h2><span class="icon-badge">${UI.icon('film')}</span>Watching / reading</h2><button class="btn sm" data-goto="watchlist">Watchlist ${UI.icon('arrowRight')}</button></div>
             <div class="card-b">${watching.length ? watching.map(w => `
               <div class="kv"><span class="k">${({ movie: '🎬', show: '📺', book: '📖', game: '🎮' })[w.type] || '🎬'} ${UI.esc(w.title)}</span></div>
             `).join('') : '<div class="empty" style="padding:14px">Nothing in progress.</div>'}</div>

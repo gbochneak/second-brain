@@ -154,8 +154,18 @@ function starRating(rating, max) {
   for (let i = 1; i <= max; i++) h += `<span class="star ${i <= (rating || 0) ? 'on' : ''}" data-star="${i}">★</span>`;
   return h;
 }
+// Deterministic colored initials circle for a person's name — same name
+// always gets the same color, no photo needed. cls e.g. 'sm'|'lg' (see .avatar-circle in app.css).
+function avatarCircle(name, cls) {
+  name = (name || '').trim();
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const color = AREA_COLORS[hash % AREA_COLORS.length];
+  const initials = name ? name.split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('') : '?';
+  return `<span class="avatar-circle ${cls || ''}" style="background:${color}">${esc(initials)}</span>`;
+}
 
-window.UI = { icon, esc, toast, modal, closeModal, confirm: confirmDialog, optionsHtml, areaBadge, projectBadge, priorityPill, dueBadge, starRating, AREA_COLORS };
+window.UI = { icon, esc, toast, modal, closeModal, confirm: confirmDialog, optionsHtml, areaBadge, projectBadge, priorityPill, dueBadge, starRating, avatarCircle, AREA_COLORS };
 window.Pages = window.Pages || {};
 
 /* =========================================================================

@@ -78,7 +78,7 @@
         { key: 'followUp', label: 'Follow-up date', cmp: (a, b) => (a.followUpDate || '9999') < (b.followUpDate || '9999') ? -1 : 1 }
       ],
       columns: [
-        { key: 'name', label: 'Name', render: it => `<strong>${UI.esc(it.name)}</strong>` },
+        { key: 'name', label: 'Name', render: it => `<div class="row tight" style="align-items:center;flex-wrap:nowrap">${UI.avatarCircle(it.name, 'sm')}<strong>${UI.esc(it.name)}</strong></div>` },
         { key: 'relation', label: 'Relation', render: it => it.relation ? UI.esc(it.relation) : '—' },
         { key: 'contact', label: 'Email / Phone', render: it => {
             const parts = [it.email, it.phone].filter(Boolean).map(UI.esc);
@@ -89,13 +89,18 @@
         { key: 'followUp', label: 'Follow-up', render: it => UI.dueBadge(it.followUpDate) || '—' }
       ],
       renderCard(it) {
-        return `<div style="font-weight:540;font-size:13.5px">${UI.esc(it.name)}</div>
-          ${it.relation ? `<div class="sub" style="margin-top:2px">${UI.esc(it.relation)}</div>` : ''}
-          <div class="row tight" style="margin-top:6px">
-            ${UI.areaBadge(it.areaId)}
-            ${(it.tags || []).map(t => `<span class="tag">${UI.esc(t)}</span>`).join('')}
-            ${UI.dueBadge(it.followUpDate)}
-          </div>`;
+        return `<div class="row" style="align-items:center;flex-wrap:nowrap;gap:11px">
+          ${UI.avatarCircle(it.name)}
+          <div style="min-width:0">
+            <div style="font-weight:600;font-size:13.5px">${UI.esc(it.name)}</div>
+            ${it.relation ? `<div class="sub" style="margin-top:1px">${UI.esc(it.relation)}</div>` : ''}
+          </div>
+        </div>
+        <div class="row tight" style="margin-top:8px">
+          ${UI.areaBadge(it.areaId)}
+          ${(it.tags || []).map(t => `<span class="tag">${UI.esc(t)}</span>`).join('')}
+          ${UI.dueBadge(it.followUpDate)}
+        </div>`;
       },
       emptyLabel: 'No contacts match — try New contact or clear your filters.',
       onOpen: it => contactModal(main, it.id)
