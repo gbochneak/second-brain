@@ -7,7 +7,7 @@
    and tasks.js for the modal CRUD shape. */
 (function () {
   const esc = UI.esc;
-  const EMOJIS = ['🏠', '💼', '💪', '💰', '🎨', '📚', '❤️', '🌱', '🎯', '🧠'];
+  const EMOJIS = ['🏠', '💼', '💪', '💰', '🎨', '📚', '❤️', '🌱', '🎯', '🧠', '✝️'];
 
   /* ---------------- profile ---------------- */
   function renderProfile(container) {
