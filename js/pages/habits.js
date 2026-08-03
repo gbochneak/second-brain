@@ -267,6 +267,99 @@
     });
   }
 
+  /* ---------- progress: weight + photo, tied to the same daily note ---------- */
+  // Downscales+recompresses to a JPEG data URL before it ever touches Store,
+  // since these notes live in one JSON blob that's both persisted to
+  // localStorage and pushed whole on every sync (see js/sync.js) — a
+  // full-resolution photo per day would bloat both fast.
+  function resizeImage(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Could not read that image'));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderProgress(container, note) {
+    const wrap = container.querySelector('#progressFields');
+    const flag = container.querySelector('#progressSaveFlag');
+    wrap.innerHTML = `
+      <div class="row" style="align-items:flex-start">
+        <label class="fld" style="margin-bottom:0">
+          <span>⚖️ Weight</span>
+          <div class="row tight" style="align-items:center">
+            <input type="number" id="fWeight" step="0.1" min="0" placeholder="—" value="${note.weight != null ? note.weight : ''}" style="width:90px;flex:0 0 auto">
+            <span class="sub" style="margin:0">lbs</span>
+          </div>
+        </label>
+        <div class="fld" style="margin-bottom:0">
+          <span>📷 Progress photo</span>
+          <div class="photo-row">
+            ${note.photo ? `
+              <img class="photo-thumb" id="photoThumb" src="${note.photo}" title="Click to view full size">
+              <div class="col tight">
+                <button type="button" class="btn sm ghost" id="photoReplace">Replace</button>
+                <button type="button" class="btn sm ghost" id="photoRemove" style="color:var(--danger)">Remove</button>
+              </div>` : `
+              <button type="button" class="photo-upload" id="photoUploadBtn">📷<span>Upload photo</span></button>`}
+          </div>
+        </div>
+      </div>
+      <input type="file" accept="image/*" id="fPhoto" class="hidden">`;
+
+    let saveTimer = null;
+    wrap.querySelector('#fWeight').oninput = e => {
+      clearTimeout(saveTimer);
+      const val = e.target.value;
+      saveTimer = setTimeout(() => {
+        const updated = Store.update('notes', note.id, { weight: val === '' ? null : Math.max(0, +val) });
+        if (updated) { note = updated; flag.textContent = 'Saved ' + D.relTime(updated.updatedAt); }
+      }, 400);
+    };
+
+    const fileInput = wrap.querySelector('#fPhoto');
+    const openPicker = () => fileInput.click();
+    const uploadBtn = wrap.querySelector('#photoUploadBtn');
+    if (uploadBtn) uploadBtn.onclick = openPicker;
+    const replaceBtn = wrap.querySelector('#photoReplace');
+    if (replaceBtn) replaceBtn.onclick = openPicker;
+    const removeBtn = wrap.querySelector('#photoRemove');
+    if (removeBtn) removeBtn.onclick = async () => {
+      if (!(await UI.confirm('Remove this progress photo?'))) return;
+      const updated = Store.update('notes', note.id, { photo: null });
+      flag.textContent = 'Saved ' + D.relTime(updated.updatedAt);
+      renderProgress(container, updated);
+    };
+    const thumb = wrap.querySelector('#photoThumb');
+    if (thumb) thumb.onclick = () => UI.modal('Progress photo', `<img src="${note.photo}" style="width:100%;border-radius:var(--radius-sm);display:block">`);
+
+    fileInput.onchange = async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await resizeImage(file, 900, 0.78);
+        const updated = Store.update('notes', note.id, { photo: dataUrl });
+        flag.textContent = 'Saved ' + D.relTime(updated.updatedAt);
+        renderProgress(container, updated);
+      } catch (err) {
+        UI.toast('Could not read that image');
+      }
+    };
+  }
+
   /* ---------- page shell ---------- */
   function render(container) {
     const note = Store.notesEngine.dailyNote(D.key(cursor), true);
@@ -293,7 +386,12 @@
           <div class="card-h"><h2>Journal</h2><span class="saveflag" id="saveFlag">Saved ${D.relTime(note.updatedAt)}</span></div>
           <div class="card-b" id="journalFields"></div>
         </section>
-      </div>`;
+      </div>
+
+      <section class="card" style="margin-top:18px">
+        <div class="card-h"><h2>Progress</h2><span class="saveflag" id="progressSaveFlag">Saved ${D.relTime(note.updatedAt)}</span></div>
+        <div class="card-b" id="progressFields"></div>
+      </section>`;
 
     container.querySelector('#editHabits').onclick = () => manageHabitsModal(container);
     container.querySelector('#datePrev').onclick = () => { cursor = D.addDays(cursor, -1); render(container); };
@@ -302,6 +400,7 @@
 
     renderHabitList(container);
     renderJournal(container, note);
+    renderProgress(container, note);
   }
 
   window.Pages.habits = { render };

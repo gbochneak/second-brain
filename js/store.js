@@ -326,14 +326,16 @@ function noteByTitle(title) {
 }
 // Daily journal entry (js/pages/habits.js). `body` is the free-write
 // "General" field; gratitude/wentWell/improveTomorrow are the three
-// structured prompts, stored as their own string fields on the same note
-// rather than a separate collection so export/import/sync carry them for free.
+// structured prompts; weight (number|null) and photo (data URL string|null,
+// resized/compressed client-side — see resizeImage() in habits.js) back the
+// Progress section. All stored as their own fields on the same note rather
+// than a separate collection so export/import/sync carry them for free.
 function dailyNote(dateKeyStr, create) {
   let n = state.notes.find(x => x.daily === dateKeyStr);
   if (!n && create) {
     n = add('notes', {
       title: 'Daily — ' + dateKeyStr, body: '', type: 'note', daily: dateKeyStr, areaId: null, projectId: null,
-      gratitude: '', wentWell: '', improveTomorrow: ''
+      gratitude: '', wentWell: '', improveTomorrow: '', weight: null, photo: null
     });
   }
   return n;
