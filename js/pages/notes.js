@@ -66,7 +66,7 @@
     const items = computeList();
     list.innerHTML = items.length ? items.map(n => `
       <button class="noteitem ${n.id === selId ? 'active' : ''}" data-id="${n.id}">
-        <div class="t">${typeEmoji(n.type)} ${UI.esc(n.title || 'Untitled')}</div>
+        <div class="t">${typeEmoji(n.type)} ${UI.esc(n.title || 'Untitled')}${Store.state.settings.motivationNoteId === n.id ? ' <span class="pill accent">🌅 Morning read</span>' : ''}</div>
         <div class="p">${UI.esc((n.body || '').replace(/\s+/g, ' ').trim()) || 'No content yet.'}</div>
         <div class="m">${D.relTime(n.updatedAt)}</div>
       </button>`).join('') :
@@ -112,6 +112,7 @@
       <div class="card-h">
         <input type="text" class="title-in" id="fTitle" placeholder="Untitled" value="${UI.esc(n.title)}" style="flex:1;min-width:0">
         <div class="row tight" style="flex:0 0 auto">
+          <button class="btn sm ${Store.state.settings.motivationNoteId === n.id ? 'primary' : 'ghost'}" id="btnMorning" title="Show this note as a once-a-day popup when the app first opens">🌅 ${Store.state.settings.motivationNoteId === n.id ? 'Morning read ✓' : 'Set as morning read'}</button>
           <button class="btn sm ghost" id="btnPreview">${previewMode ? 'Edit' : 'Preview'}</button>
           <button class="btn sm danger" id="btnDelete">Delete</button>
         </div>
@@ -172,6 +173,14 @@
       renderEditor(container);
     });
 
+    q('#btnMorning').onclick = () => {
+      const isSet = Store.state.settings.motivationNoteId === n.id;
+      Store.state.settings.motivationNoteId = isSet ? null : n.id;
+      Store.save();
+      UI.toast(isSet ? 'No longer your morning read' : 'Set as your morning read — it\'ll pop up once a day, first thing');
+      renderList(container);
+      renderEditor(container);
+    };
     q('#btnPreview').onclick = () => {
       flushPending();
       previewMode = !previewMode;

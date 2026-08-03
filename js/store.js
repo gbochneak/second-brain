@@ -35,7 +35,11 @@
                  -- written by js/viewengine.js, but lives in the same store so
                  export/import carries it along.
      profile    {name,emoji,bio,mission}            -- single object, not an array
-     settings   {theme:'system'|'light'|'dark'}
+     settings   {theme:'system'|'light'|'dark', motivationNoteId, motivationLastShown}
+                -- motivationNoteId: id of the note (js/pages/notes.js) shown as
+                   the once-a-day morning popup, set via that note's "Morning
+                   read" toggle. motivationLastShown: 'YYYY-MM-DD' of the last
+                   day it was shown — see App.boot()'s morning-motivation check.
 
    Generic CRUD (works for every array collection above):
      Store.list(collection, {includeArchived}) -> array
@@ -80,7 +84,7 @@ function blankState() {
     areas: [], projects: [], goals: [], tasks: [],
     habits: [], completions: {},
     notes: [], ideas: [], watchlist: [], contacts: [], smartViews: [],
-    settings: { theme: 'system' }
+    settings: { theme: 'system', motivationNoteId: null, motivationLastShown: null }
   };
 }
 

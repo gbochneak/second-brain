@@ -232,11 +232,35 @@ document.addEventListener('keydown', e => {
   else closeSidebar();
 });
 
+// Once-a-day popup of whichever note is flagged as the "morning read" (see
+// the toggle in js/pages/notes.js). Runs once per real page load out of
+// boot(), and Store.state.settings.motivationLastShown gates it to once per
+// calendar day even across multiple opens/reloads on the same day.
+function maybeShowMorningMotivation() {
+  const s = Store.state.settings;
+  if (!s.motivationNoteId) return;
+  const todayKey = Store.date.key(Store.date.today());
+  if (s.motivationLastShown === todayKey) return;
+  const note = Store.get('notes', s.motivationNoteId);
+  if (!note) return; // the flagged note was deleted since — nothing to show
+  s.motivationLastShown = todayKey;
+  Store.save();
+  const h = new Date().getHours();
+  const greeting = h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  UI.modal(`${greeting} ☀️`, `
+    <h3 style="font-size:17px;margin-bottom:10px">${esc(note.title || 'Untitled')}</h3>
+    <div class="preview">${Store.notesEngine.md(note.body)}</div>
+    <button class="btn primary" id="mmDismiss" style="width:100%;margin-top:16px">Start my day →</button>
+  `, { wide: true });
+  document.getElementById('mmDismiss').onclick = closeModal;
+}
+
 function boot() {
   buildSidebar();
   wireMobileNav();
   applyTheme();
   go('dashboard');
+  maybeShowMorningMotivation();
 }
 window.App = { go, render, boot, applyTheme, NAV_GROUPS, ALL_NAV };
 })();
