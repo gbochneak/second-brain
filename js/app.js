@@ -190,12 +190,22 @@ function buildSidebar() {
     <button class="navbtn" id="themeBtn">${icon('theme')} <span id="themeLbl">Theme</span></button>
     ${FOOT_ITEMS.map(it => `<button class="navbtn" data-nav="${it.key}">${icon(it.icon)} ${esc(it.label)}</button>`).join('')}
   `;
-  document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => go(b.dataset.nav));
+  document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { go(b.dataset.nav); closeSidebar(); });
   document.getElementById('themeBtn').onclick = () => {
     const order = ['system', 'light', 'dark'];
     Store.state.settings.theme = order[(order.indexOf(Store.state.settings.theme) + 1) % 3];
     Store.save(); applyTheme();
   };
+}
+// Off-canvas sidebar for narrow viewports (see the .mobilebar/.sidebar-scrim
+// rules in app.css, gated behind the same max-width breakpoint). Harmless
+// no-op on desktop widths since nothing ever adds the 'sidebar-open' class
+// there — the hamburger button is display:none above the breakpoint.
+function openSidebar() { document.getElementById('appRoot').classList.add('sidebar-open'); }
+function closeSidebar() { document.getElementById('appRoot').classList.remove('sidebar-open'); }
+function wireMobileNav() {
+  document.getElementById('hamburgerBtn').onclick = openSidebar;
+  document.getElementById('sidebarScrim').onclick = closeSidebar;
 }
 function applyTheme() {
   const t = Store.state.settings.theme || 'system';
@@ -207,11 +217,14 @@ function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('overlay').innerHTML) closeModal();
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('overlay').innerHTML) closeModal();
+  else closeSidebar();
 });
 
 function boot() {
   buildSidebar();
+  wireMobileNav();
   applyTheme();
   go('dashboard');
 }

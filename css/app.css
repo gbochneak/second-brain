@@ -269,3 +269,66 @@ label.fld > span{display:block;font-size:12.5px;color:var(--muted);margin-bottom
   .grid2{grid-template-columns:1fr}
   .notes-wrap{grid-template-columns:1fr}
 }
+
+/* =========================================================================
+   Mobile: off-canvas sidebar + touch-target and spacing adjustments
+   ========================================================================= */
+.mobilebar{display:none}
+.sidebar-scrim{display:none}
+@media(max-width:880px){
+  .mobilebar{
+    display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:40;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .hamburger{
+    width:36px;height:36px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;color:var(--text);
+  }
+  .hamburger:active{background:var(--panel-2)}
+  .hamburger svg{width:20px;height:20px}
+  .mobilebar-title{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:-.01em;font-size:15px}
+  .mobilebar-title .dot{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#a78bfa);flex:0 0 auto}
+
+  .app{display:block}
+  .sidebar{
+    position:fixed;inset:0 auto 0 0;z-index:60;width:min(82vw,300px);
+    transform:translateX(-100%);transition:transform .22s ease;
+    padding-top:calc(18px + env(safe-area-inset-top));
+    padding-bottom:calc(18px + env(safe-area-inset-bottom));
+    box-shadow:var(--shadow);
+  }
+  .sidebar .brand{display:none}
+  #appRoot.sidebar-open .sidebar{transform:translateX(0)}
+  .sidebar-scrim{
+    display:block;position:fixed;inset:0;z-index:55;background:rgba(10,11,14,.45);
+    opacity:0;pointer-events:none;transition:opacity .22s ease;
+  }
+  #appRoot.sidebar-open .sidebar-scrim{opacity:1;pointer-events:auto}
+
+  .main{padding:18px 16px 90px;max-width:none}
+  h1{font-size:22px}
+  .page-head{margin-bottom:16px}
+  .navbtn{padding:11px 12px;font-size:14.5px}
+  .check{width:28px;height:28px}
+  .btn{padding:9px 13px}
+
+  /* View engine toolbar: search gets its own full-width row, filters wrap below */
+  .toolbar{padding:10px 12px}
+  .ve-search{width:100%;flex:1 1 100%;order:-1}
+  .ve-body{padding:6px 10px 12px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+
+  /* Calendar: tighter cells so 7 columns actually fit a phone width */
+  .cal-grid{gap:3px}
+  .cal-cell{min-height:52px;padding:3px;font-size:9.5px}
+  .cal-daynum{font-size:9.5px}
+  .cal-item{padding:1px 3px;font-size:9px}
+  .cal-head{font-size:13px;gap:10px}
+
+  .notes-wrap{gap:12px}
+  .notelist{max-height:38vh}
+  .grid2{gap:14px}
+
+  .scrim{padding:0;align-items:flex-end}
+  .modal{width:100%;max-height:92vh;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+}
